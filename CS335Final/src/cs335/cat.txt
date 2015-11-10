@@ -1,0 +1,863 @@
+package cs335;
+
+import com.owens.oobjloader.builder.*;
+import com.owens.oobjloader.parser.*;
+
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+import java.awt.event.MouseMotionListener;
+import java.util.ArrayList;
+import java.util.Random;
+
+import javax.media.opengl.*;
+import javax.media.opengl.fixedfunc.GLMatrixFunc;
+import javax.media.opengl.glu.GLU;
+import javax.media.opengl.glu.GLUquadric;
+
+import java.nio.DoubleBuffer;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+import java.awt.event.MouseMotionListener;
+import java.awt.image.BufferedImage;
+import java.awt.image.ColorModel;
+import java.awt.image.DataBuffer;
+import java.awt.image.Raster;
+import java.awt.image.WritableRaster;
+import java.io.File;
+import java.io.IOException;
+import java.net.URL;
+import java.nio.ByteBuffer;
+import java.awt.image.DataBufferByte; 
+
+
+
+
+
+
+
+
+
+
+import java.nio.ByteOrder;
+import java.util.Hashtable;
+
+import javax.imageio.ImageIO;
+import javax.media.opengl.*;
+
+import com.jogamp.opengl.util.awt.TextRenderer;
+
+public class JoglEventListener implements GLEventListener, KeyListener, MouseListener, MouseMotionListener {
+	private int windowWidth, windowHeight;
+	
+	private TextureLoader texture_loader = null;
+	private Skybox current_skybox = null;
+	private final float skybox_size = 8000.0f;
+	private boolean skybox_follow_camera = true;
+	private final String[] skybox_names = {
+		"ThickCloudsWater", "DarkStormy",
+		"FullMoon", "SunSet",
+		"CloudyLightRays", "TropicalSunnyDay"
+	};
+	// Making this larger will allocate more skybox textures to start, giving a
+	// super slow startup, but allowing you to switch between them quickly.
+	// Best to use a value of 1 for production code.
+	private final int skybox_max_textures = 1;
+	private Skybox[] skyboxes = new Skybox[ skybox_names.length ];
+	private boolean psychedelic_mode = false;
+	private int paper_cube_size = 1;
+	
+	
+	
+	private float scene_eye_x = 0.0f;
+	private float scene_eye_y = 0.0f;
+	private float scene_eye_z = 0.0f;
+	private float scene_look_x = 1.0f;
+	private float scene_look_y = 0.0f;
+	private float scene_look_z = 0.0f;
+	
+	private int mouse_x0 = 0;
+	private int mouse_y0 = 0;
+	
+	private int mouse_mode = 0;
+	
+	private final int MOUSE_MODE_NONE = 0;
+	private final int MOUSE_MODE_ROTATE = 1;
+	private final int MOUSE_MODE_ZOOM = 2;
+	private boolean[] keys = new boolean[256];
+	
+	double rtMat[] = new double[16];
+	int texID[]  = new int[3];
+	float[] lightPos0 = { 0.0f, 0.0f , 20.0f,1 };// light position
+	
+	//Billboards
+	TGABuffer buffer;
+	final int[] tmp = new int[1];
+	int texName;
+	
+	//Vehicle view
+	float angleV=0.0f,deltaAngleV = 0.0f,ratio;
+	float x=0.0f,y=0.0f,z=10.0f;
+	float lx=0.0f,ly=20.0f,lz=0.0f;
+	int deltaMoveV = 0, bla=0,deltaUpV=0;
+		int debug=1,type = 0;
+	int w,h;
+	char s[] = new char[30];
+	float time=0,timebase=0;
+	int frame=0;
+	
+	//zoom 
+		float zlookatoffset = 0;
+		float zoomoffset = 0.0f;
+		double zoomy;
+	private GLU glu = new GLU();
+	
+	public void displayChanged( GLAutoDrawable gLDrawable, boolean modeChanged,
+			boolean deviceChanged) { }
+	
+	//Viewing mode
+	
+	private final int VEHICLE_MODE = 0;
+	private final int FREE_VIEW_MODE = 1;
+	private int viewing_mode = 1;
+	
+	//track
+	float track_size = 6000.0f;
+	Racetrack track = new Racetrack(track_size);
+	Racecar user = new Racecar(0);
+	float car_size = 20.0f;
+	
+	
+	
+	//Models
+	LoadCarModel OurCar = new LoadCarModel();
+	LoadCatModel OurCat = new LoadCatModel();
+	LoadBuildingModel OurBuilding = new LoadBuildingModel();
+	LoadBuildingModel OurBuilding2 = new LoadBuildingModel();
+   // float materialAmbient2[] = {0.0f, 1.0f, 0.0f};
+	//float materialDiffuse2[] ={0.0f,1.0f,0.0f};
+	//float  materialSpecular2[] = {0.0f,1.0f,0f};
+	//float shininess = 90;
+	float WRot = 0;
+	
+	//Text rendering
+	
+	
+	@Override
+	public void init( GLAutoDrawable gLDrawable ) {
+		GL2 gl = gLDrawable.getGL().getGL2();
+		buffer = TGABufferMaker.make();//Billboardtrees
+		gl.glShadeModel(GL.GL_LINE_SMOOTH);//not needed? 
+		gl.glClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+		gl.glColor3f( 1.0f, 1.0f, 1.0f );
+		gl.glClearDepth( 1.0f );
+		gl.glEnable( GL.GL_DEPTH_TEST );
+		gl.glDepthFunc( GL.GL_LEQUAL );
+		gl.glEnable( GL.GL_TEXTURE_2D );
+		
+		
+		
+		
+		// Initialize the texture loader and skybox.
+		texture_loader = new TextureLoader( gl );
+		
+		for ( int i = 0; i < skybox_max_textures; ++i )
+			skyboxes[ i ] = new Skybox( texture_loader, skybox_names[ i ] );
+		
+		current_skybox = skyboxes[ 0 ];
+		
+		// Initialize the keys.
+		for ( int i = 0; i < keys.length; ++i )
+			keys[i] = false;
+		
+		gl.glMatrixMode( GLMatrixFunc.GL_MODELVIEW );
+		gl.glLoadIdentity();
+		gl.glGetDoublev(GL2.GL_MODELVIEW_MATRIX, rtMat, 0);
+			        float[] noAmbient = { 0.2f, 0.2f, 0.2f, 1f };     // low ambient light
+			        float[] diffuse = { 1.0f, 1.0f, 1.0f, 1f };        // full diffuse color
+			        float[] specular = {1.0f, 1.0f, 1.0f, 1.0f};
+			         gl.glEnable(GL2.GL_LIGHTING);
+			         gl.glEnable(GL2.GL_LIGHT0);
+			         gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_AMBIENT, noAmbient, 0);
+			         gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_DIFFUSE, diffuse, 0);
+			         gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_POSITION,lightPos0, 0);
+			         gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_SPECULAR, specular, 0);
+		        
+			        gl.glEnable(GL2.GL_RESCALE_NORMAL );
+			        // load an image; 
+			        try {
+						texture_loader.loadTexture( texID[0], "skybox_textures/ThickCloudsWater/ufkdpd.png"  );
+					} catch ( Exception e ) {
+						System.err.println( "Unable to load texture: " + e.getMessage() );
+					}
+			        
+			        gl.glGenTextures(1, tmp, 0);
+			        texName = tmp[0];
+			        gl.glBindTexture(GL.GL_TEXTURE_2D, texName);
+			        gl.glTexParameteri(GL.GL_TEXTURE_2D,	GL.GL_TEXTURE_WRAP_S,	GL.GL_REPEAT);
+			        gl.glTexParameteri(GL.GL_TEXTURE_2D,	GL.GL_TEXTURE_WRAP_T,	GL.GL_REPEAT);
+
+			        gl.glTexParameteri(GL.GL_TEXTURE_2D,	GL.GL_TEXTURE_MAG_FILTER	,GL.GL_NEAREST);
+			        gl.glTexParameteri(GL.GL_TEXTURE_2D,	GL.GL_TEXTURE_MIN_FILTER	,GL.GL_LINEAR);
+			    	
+			        gl.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA, buffer.getWidth(), buffer.getHeight(), 
+			    				0, GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, buffer.getBuffer());
+
+			       
+			        gl.glBindTexture(GL.GL_TEXTURE_2D, 0);
+
+
+	}
+	 private ByteBuffer convertImageData(BufferedImage bufferedImage) {
+		 	        ByteBuffer imageBuffer;
+		 	        DataBuffer buf = bufferedImage.getRaster().getDataBuffer(); 
+		 	        final byte[] data = ((DataBufferByte) buf).getData();	        
+		 	        return (ByteBuffer.wrap(data)); 
+		 	    }
+
+	@Override
+	public void reshape( GLAutoDrawable gLDrawable, int x, int y, int width, int height ) {
+		windowWidth = width;
+		windowHeight = height > 0 ? height : 1;
+		
+		final GL2 gl = gLDrawable.getGL().getGL2();
+		
+		gl.glViewport( 0, 0, width, height );
+		gl.glMatrixMode( GLMatrixFunc.GL_PROJECTION );
+		gl.glLoadIdentity();
+		glu.gluPerspective( 60.0f, (float) windowWidth / windowHeight, 0.1f, skybox_size * (float) Math.sqrt( 3.0 ) / 2.0f );
+	}
+	//float 
+	@Override
+	public void display( GLAutoDrawable gLDrawable ) {
+		final GL2 gl = gLDrawable.getGL().getGL2();
+		
+		
+		gl.glClear( GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT );
+		
+		gl.glMatrixMode( GLMatrixFunc.GL_MODELVIEW );
+		gl.glPushMatrix();
+		gl.glLoadIdentity();
+		if(viewing_mode == FREE_VIEW_MODE)
+		{
+		final float throttle_pan = 2.1f;
+		
+		// Update the camera state.
+		if ( keys[KeyEvent.VK_W] || keys[KeyEvent.VK_S] ) {
+			float normxy = (float) Math.sqrt( scene_look_x * scene_look_x + scene_look_y * scene_look_y );
+			float multiplier = keys[KeyEvent.VK_W] ? 1.0f : -1.0f;
+			scene_eye_x += scene_look_x / normxy * throttle_pan * multiplier;
+			scene_eye_y += scene_look_y / normxy * throttle_pan * multiplier;
+		}
+		
+		if ( keys[KeyEvent.VK_R] ) {
+			scene_eye_z += throttle_pan;
+		} else if ( keys[KeyEvent.VK_F] ) {
+			scene_eye_z -= throttle_pan;
+		 
+		}
+		
+		if ( keys[KeyEvent.VK_A] || keys[KeyEvent.VK_D] ) {
+			float theta = (float) Math.atan2( scene_look_y, scene_look_x );
+			float phi = (float) Math.acos( scene_look_z );
+			
+			if ( keys[KeyEvent.VK_A] )
+				theta += Math.PI / 2.0;
+			else if ( keys[KeyEvent.VK_D] )
+				theta -= Math.PI / 2.0;
+			
+			float strafe_x = (float)( Math.cos( theta ) * Math.sin( phi ) );
+			float strafe_y = (float)( Math.sin( theta ) * Math.sin( phi ) );
+			float normxy = (float) Math.sqrt( strafe_x * strafe_x + strafe_y * strafe_y );
+			
+			scene_eye_x += strafe_x / normxy * throttle_pan;
+			scene_eye_y += strafe_y / normxy * throttle_pan;
+		}
+		//gl.glLoadIdentity();
+		glu.gluLookAt( scene_eye_x + zoomoffset, scene_eye_y+ zoomoffset, scene_eye_z+ zoomoffset,
+				scene_eye_x + scene_look_x, scene_eye_y + scene_look_y, scene_eye_z + scene_look_z,
+				0.0f, 0.0f, 1.0f );
+		}
+		else if(viewing_mode == VEHICLE_MODE){
+			/*if (deltaMoveV!=0)
+				moveMeFlat(deltaMoveV);
+			if (deltaUpV!=0)
+				Lookup(deltaUpV);
+			if (deltaAngleV!=0) {
+				angleV += deltaAngleV;
+				orientMe(angleV);
+			}*/
+			gl.glLoadIdentity();
+			user.updateposition(0.01f, keys[KeyEvent.VK_W], keys[KeyEvent.VK_S], keys[KeyEvent.VK_A], keys[KeyEvent.VK_D], track);
+			   
+			   user.checkcollisions(car_size, track);
+			   glu.gluLookAt(user.carpx, user.carpy, user.carpz, 
+					   user.carpx + (float)Math.cos((user.carangle) * ((float)Math.PI / 180.0f)), user.carpy - (float)Math.sin((user.carangle) * ((float)Math.PI / 180.0f)), user.carpz,
+			       0.0f,0.0f,1.0f);
+		
+		}
+		//gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_POSITION,lightPos0, 0);
+		//gl.glDisable(GL2.GL_LIGHT0);
+		
+		
+		gl.glPushMatrix();
+		
+		
+		   if( viewing_mode == FREE_VIEW_MODE )
+		   {
+		    gl.glTranslatef( scene_eye_x, scene_eye_y, scene_eye_z );
+		   }
+		   else if(viewing_mode == VEHICLE_MODE)
+		   {
+		    gl.glTranslatef( user.carpx, user.carpy, user.carpz );
+		   }
+		   
+		
+		
+		
+		gl.glEnable(GL.GL_TEXTURE_2D);
+		gl.glTexEnvf(GL2.GL_TEXTURE_ENV, GL2.GL_TEXTURE_ENV_MODE, GL2.GL_REPLACE);
+		current_skybox.draw( gl, skybox_size );
+		gl.glDisable(GL.GL_TEXTURE_2D);
+		gl.glPopMatrix();
+		
+		
+		
+		
+		
+		
+		gl.glPushMatrix();
+		
+        
+        
+        gl.glPushMatrix();
+        gl.glEnable(GL.GL_TEXTURE_2D);
+        gl.glBindTexture(GL2.GL_TEXTURE_2D, texID[0]);
+        gl.glDisable(GL2.GL_LIGHTING);
+		drawRacetrack(gl,6000);
+		gl.glDisable(GL.GL_TEXTURE_2D);
+		gl.glPopMatrix();
+		
+		
+		
+		gl.glPushMatrix();
+		gl.glTranslatef(0.0f,-1458.0f,1.2f);
+		gl.glBegin(GL2.GL_QUADS);
+		gl.glTexCoord2f(0,0);gl.glVertex3f(-30.0f, 0.0f, 0.0f);
+		gl.glTexCoord2f(1,0);gl.glVertex3f(30.0f, 0.0f, 0.0f);
+		gl.glTexCoord2f(1,1);gl.glVertex3f(30.0f, 260.0f,  0.0f);
+		gl.glTexCoord2f(0,1);gl.glVertex3f(-30.0f, 260.0f,  0.0f);
+		gl.glEnd();
+		
+		
+		gl.glPopMatrix();
+		gl.glPushMatrix();
+		gl.glTranslatef(0.0f,-1458.0f,96.0f);
+		gl.glBegin(GL2.GL_QUADS);
+		gl.glTexCoord2f(0,0);gl.glVertex3f(0.0f, 0.0f, 30.0f);
+		gl.glTexCoord2f(1,0);gl.glVertex3f(0.0f, 0.0f,0.0f);
+		gl.glTexCoord2f(1,1);gl.glVertex3f(0.0f, 260.0f, 0.0f);
+		gl.glTexCoord2f(0,1);gl.glVertex3f(0.0f, 260.0f, 30.0f);
+		gl.glEnd();
+		
+		
+		gl.glPopMatrix();		
+		
+		
+		
+		
+		
+		
+		gl.glPushMatrix();	
+		gl.glTranslatef(0.0f,-1458.0f,1.0f);
+	    gl.glBegin( GL2.GL_QUAD_STRIP );
+	    for( int phi = 0; phi <= 360; phi++ )  // curve 1
+	    {
+	    	float deg = (float) Math.PI / 180.0f;
+	        float x = 1 * (float)Math.cos(phi * deg);
+	        float y = 1 * -(float)Math.sin(phi * deg);
+	        gl.glNormal3f((float)Math.cos(Math.PI + phi * deg), (float)Math.sin(Math.PI + phi * deg), 0f);
+	        gl.glVertex3f(x, y, 0f);
+	        gl.glVertex3f(x, y, 125.0f);
+	        
+	    }
+		gl.glEnd();
+	    gl.glPopMatrix();	
+		gl.glPushMatrix();		
+		gl.glTranslatef(0.0f,-1198.0f,1.0f);
+	    gl.glBegin( GL2.GL_QUAD_STRIP );
+	    
+	    for( int phi = 0; phi <= 360; phi++ )  // curve 1
+	    {
+	    	float deg = (float) Math.PI / 180.0f;
+	        float x = 1 * (float)Math.cos(phi * deg);
+	        float y = 1 * -(float)Math.sin(phi * deg);
+	        gl.glNormal3f((float)Math.cos(Math.PI + phi * deg), (float)Math.sin(Math.PI + phi * deg), 0f);
+	        gl.glVertex3f(x, y, 0f);
+	        gl.glVertex3f(x, y, 125.0f);
+	        
+	    }
+		gl.glEnd();
+	    gl.glPopMatrix();			
+		
+		
+		
+		
+		//gl.glDisable(GL.GL_TEXTURE_2D);
+		gl.glPushMatrix();
+		gl.glEnable(GL.GL_TEXTURE_2D);
+		gl.glEnable(GL2.GL_LIGHTING);
+		OurCar.drawCarModel(gl, WRot += 5, 8.50f, 15.0f);
+		gl.glDisable(GL.GL_TEXTURE_2D);
+		gl.glDisable(GL2.GL_LIGHTING);
+		gl.glPopMatrix();
+		gl.glPushMatrix();
+		gl.glEnable(GL.GL_TEXTURE_2D);
+		gl.glEnable(GL2.GL_LIGHTING);
+		gl.glTexEnvf(GL2.GL_TEXTURE_ENV, GL2.GL_TEXTURE_ENV_MODE, GL2.GL_REPLACE);
+		gl.glPushMatrix();
+		gl.glTranslatef(0.0f, -1770.0f, 0.0f);
+		OurCat.drawCatModel(gl, WRot = 180, 23.0f, 8.0f);
+		gl.glPopMatrix();
+		gl.glDisable(GL2.GL_LIGHTING);
+		gl.glDisable(GL.GL_TEXTURE_2D);
+		gl.glPopMatrix();
+		
+		
+		
+		gl.glPushMatrix();
+		gl.glEnable(GL.GL_TEXTURE_2D);
+		gl.glEnable(GL2.GL_LIGHTING);
+		gl.glTexEnvf(GL2.GL_TEXTURE_ENV, GL2.GL_TEXTURE_ENV_MODE, GL2.GL_REPLACE);
+		gl.glPushMatrix();
+		gl.glTranslatef(0.0f, -1970.0f, 0.0f);
+		OurBuilding.drawbuildingModel(gl, WRot += 0, 0.0f, 15.0f);
+		gl.glPopMatrix();
+		gl.glDisable(GL.GL_TEXTURE_2D);
+		gl.glDisable(GL2.GL_LIGHTING);
+		gl.glPopMatrix();
+		
+		
+		
+		
+		gl.glPushMatrix();
+		gl.glEnable(GL.GL_TEXTURE_2D);
+		gl.glEnable(GL2.GL_LIGHTING);
+		gl.glTexEnvf(GL2.GL_TEXTURE_ENV, GL2.GL_TEXTURE_ENV_MODE, GL2.GL_REPLACE);
+		gl.glPushMatrix();
+		gl.glTranslatef(-1000.0f, 1900.0f, 0.0f);
+		OurBuilding2.drawbuildingModel(gl, 180.0f, 0.0f, 16.0f);
+		gl.glPopMatrix();
+		gl.glDisable(GL.GL_TEXTURE_2D);
+		gl.glDisable(GL2.GL_LIGHTING);
+		gl.glPopMatrix();
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+	
+		gl.glPushMatrix();
+		gl.glTranslatef(0.0f, 0.0f, 0.5f);
+		gl.glRotatef(180.0f, 0.0f, 1.0f, 0.0f);
+		gl.glEnable(GL.GL_TEXTURE_2D);
+		gl.glEnable(GL2.GL_LIGHTING);
+		gl.glTexEnvf(GL2.GL_TEXTURE_ENV, GL2.GL_TEXTURE_ENV_MODE, GL2.GL_MODULATE);
+		track.draw_walls(gl, 6000.0f, -10.50f );
+		gl.glDisable(GL2.GL_LIGHTING);
+		gl.glDisable(GL.GL_TEXTURE_2D);
+		
+		gl.glPopMatrix();
+		
+		
+		
+		
+		gl.glPushMatrix();
+		gl.glEnable(GL.GL_TEXTURE_2D);
+		gl.glTranslatef(90.0f,0.0f,1.0f);
+		gl.glTexEnvf(GL2.GL_TEXTURE_ENV, GL2.GL_TEXTURE_ENV_MODE, GL2.GL_REPLACE);
+		
+		
+		gl.glPushMatrix();
+		gl.glTranslatef(-300.0f, 1700.0f, 0.0f );
+		for(float i = -1; i < 7.0f; i++){
+			for(float j = 0; j< 3.0f; j++)
+			{
+			gl.glPushMatrix();
+			gl.glTranslatef(i*200.0f,j*200.0f, 0.0f);
+			drawTrees(gl);
+			gl.glPopMatrix();
+			}
+		}
+		gl.glPopMatrix();
+		
+		
+		
+		
+		gl.glTranslatef(90.0f,-1000.0f,1.0f);
+		gl.glPushMatrix();
+		/*(for(float i = 2; i < 8.0f; i++){
+		gl.glPushMatrix();
+		gl.glTranslatef(-i*200.0f, 0.0f, 0.0f);
+		drawTrees(gl);
+		gl.glPopMatrix();
+		}*/
+		
+		
+		
+		for(float i = -1; i < 7.0f; i++){
+			for(float j = 0; j< 3.0f; j++)
+			{
+			gl.glPushMatrix();
+			gl.glTranslatef(i*200.0f,j*200.0f, 0.0f);
+			drawTrees(gl);
+			gl.glPopMatrix();
+			}
+		}
+		gl.glPushMatrix();
+		gl.glTranslatef(0.0f,-1400.0f,1.0f);
+		for(float i = -12; i <12.0f; i++){
+			if(i == 0 )
+			{
+				i+= 1.0f;
+			}
+			if(i == -1 ){i+= 2.0f;}
+			for(float j = 0; j< 5.0f; j++)
+			{
+			gl.glPushMatrix();
+			gl.glTranslatef(i*200.0f,j*200.0f, 0.0f);
+			drawTrees(gl);
+			gl.glPopMatrix();
+			}
+		}		
+		
+		
+
+		gl.glPopMatrix();
+		
+		
+		
+		
+		
+		
+		gl.glPopMatrix();
+		
+		
+	
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		gl.glDisable(GL.GL_TEXTURE_2D);
+		gl.glPopMatrix();
+		gl.glPopMatrix();		
+		gl.glPopMatrix();
+		
+	}
+	
+	
+	
+	void drawRacetrack( GL2 gl, float size ) {
+		float materialColor[] = {1.0f, 1.0f, 1.0f, 1.0f};
+		//The specular (shiny) component of the material
+		float  materialSpecular[] = {1f,1f,1f,0f};
+		//The color emitted by the material
+		float materialEmission[] = {0.0f,0.0f,0.0f, 0.0f};
+		float shininess = 90;
+		//gl.glEnable(GL2.GL_COLOR_MATERIAL);
+		gl.glMaterialfv(GL2.GL_FRONT, GL2.GL_AMBIENT_AND_DIFFUSE, materialColor, 0);
+		gl.glMaterialfv(GL2.GL_FRONT, GL2.GL_SPECULAR, materialSpecular, 0);
+		gl.glMaterialfv(GL2.GL_FRONT, GL2.GL_EMISSION, materialEmission, 0);
+		gl.glMaterialf(GL2.GL_FRONT, GL2.GL_SHININESS, shininess);
+		//gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
+		//gl.glBindTexture(gl.GL_TEXTURE_2D, texID[0]);
+		
+		gl.glTexEnvf(GL2.GL_TEXTURE_ENV, GL2.GL_TEXTURE_ENV_MODE, GL2.GL_REPLACE);
+		final float d = size / 2.0f;
+		gl.glColor3f(1.0f, 1.0f, 1.0f);
+		gl.glBegin( GL2.GL_QUADS );
+		gl.glNormal3f(0,  0, 1);
+		gl.glColor3f(0.0f, 1.0f, 1.0f);
+		gl.glTexCoord2f(0.0f, 0.0f);gl.glVertex3f( d, d, 0.0f ); 
+		gl.glTexCoord2f(1.0f, 0.0f);gl.glVertex3f( -d, d, 0.0f );
+		gl.glTexCoord2f(1.0f, 1.0f);gl.glVertex3f( -d, -d, 0.0f );
+		gl.glTexCoord2f(0.0f, 1.0f);gl.glVertex3f( d, -d, 0.0f );
+		
+		gl.glEnd();
+		
+	}
+
+    /*public void orientMe(float ang) {
+
+
+    	lx = (float) Math.sin(ang);
+    	ly = -(float) Math.cos(ang);
+    }
+
+
+    public void moveMeFlat(int i) {
+    	x = (float) (x + i*(lx)*0.1);
+    	y = (float) (y + i*(ly)*0.1);
+    }
+
+    public void Lookup(int i) {
+    	lz +=0.01*i;
+    }*/
+	void drawTrees(GL2 gl)
+	{
+		float pos[]=new float[3],right[]=new float[3],up[]=new float[3];
+		gl.glEnable(GL.GL_BLEND);
+		gl.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA);
+		gl.glEnable(GL2.GL_ALPHA_TEST);
+//		glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_REPLACE);
+		gl.glAlphaFunc(GL.GL_GREATER, 0);
+		gl.glBindTexture(GL.GL_TEXTURE_2D,texName);
+		for(int i = -10; i < 10; i+=7)
+			for(int j = -10; j < 10; j+=7) {
+				gl.glPushMatrix();
+				gl.glTranslatef((float)(5+i*10.0f),(float)(5+j * 10.0f),0.0f);
+				pos[0] = (float)(5+i*10.0); pos[1] = 0; pos[2] = (float)(5+j * 10.0);
+				if (type == 0) {
+					//l3dBillboardCheatSphericalBegin();
+					float modelview[]=new float[16];
+					int i1,j1;
+
+					// save the current modelview matrix
+					gl.glPushMatrix();
+
+					// get the current modelview matrix
+					gl.glGetFloatv(GL2.GL_MODELVIEW_MATRIX , modelview,0);
+
+					// undo all rotations
+					// beware all scaling is lost as well 
+					for( i1=0; i1<3; i1++ ) 
+						for( j1=0; j1<3; j1++ ) {
+							if ( i1==j1 )
+								modelview[i1*4+j1] = 1.0f;
+							else
+								modelview[i1*4+j1] = 0.0f;
+						}
+
+					// set the modelview with no rotations
+					gl.glLoadMatrixf(modelview,0);
+				}
+					gl.glBegin(GL2.GL_QUADS);
+					gl.glTexCoord2f(0,0);gl.glVertex3f(-30.0f, 0.0f, 0.0f);
+					gl.glTexCoord2f(1,0);gl.glVertex3f(30.0f, 0.0f, 0.0f);
+					gl.glTexCoord2f(1,1);gl.glVertex3f(30.0f, 100.0f,  0.0f);
+					gl.glTexCoord2f(0,1);gl.glVertex3f(-30.0f, 100.0f,  0.0f);
+					gl.glEnd();
+				if (type != 2 && type != 3 && type != 6) // restore matrix
+					gl.glPopMatrix();
+					//l3dBillboardEnd();
+				gl.glPopMatrix();
+
+			}
+		gl.glBindTexture(GL.GL_TEXTURE_2D,0);
+		gl.glDisable(GL.GL_BLEND);
+		gl.glDisable(GL2.GL_ALPHA_TEST);
+	}
+	/*public void drawText(GL2 gl, final char text, int length, int x, int y)
+	{
+		gl.glMatrixMode( GLMatrixFunc.GL_PROJECTION );
+		DoubleBuffer matrix = new DoubleBuffer;
+		gl.glGetDoublev(GL2.GL_PROJECTION_MATRIX, matrix);
+	}*/
+	@Override
+	public void dispose( GLAutoDrawable arg0 ) {
+	}
+
+	@Override
+	public void keyTyped( KeyEvent e ) {
+		char key = e.getKeyChar();
+		
+		switch ( key ) {
+			
+			
+						
+			case KeyEvent.VK_OPEN_BRACKET:
+				if ( paper_cube_size > 0 )
+					paper_cube_size--;
+				break;
+				
+			case KeyEvent.VK_CLOSE_BRACKET:
+				paper_cube_size++;
+				break;
+			case KeyEvent.VK_M:
+				if(viewing_mode == VEHICLE_MODE)
+				{			
+					viewing_mode = FREE_VIEW_MODE;
+				}
+				else
+				{
+					viewing_mode = VEHICLE_MODE;
+				}
+		}
+		
+		// Change the skybox dynamically.
+		if ( key >= '1' && key <= '1' + Math.min( skybox_names.length, skybox_max_textures ) - 1 )
+			current_skybox = skyboxes[ key - 0x30 - 1 ];
+	}
+
+	@Override
+	public void keyPressed( KeyEvent e ) {
+		
+			keys[ e.getKeyCode() ] = true;
+		
+			/*char key= e.getKeyChar();
+			//System.out.printf("Key typed: %c\n", key);
+		    switch (key) {
+		    case 'a' : deltaAngleV = -0.01f;break;
+			case 'd' : deltaAngleV = 0.01f;break;
+			case 'w' : deltaMoveV = 1;break;
+			case 's' : deltaMoveV = -1;break;
+			case 'q' : deltaUpV = 1;break;
+			case 'z' : deltaUpV = -1;break;*/
+			
+		
+		
+	}
+
+	@Override
+	public void keyReleased( KeyEvent e ) {
+		//if(viewing_mode == FREE_VIEW_MODE){
+			keys[ e.getKeyCode() ] = false;
+		/*}
+		else if(viewing_mode == VEHICLE_MODE)
+		{
+			char key= e.getKeyChar();
+			switch (key) {
+			case 'a' : 
+			case 'd' : deltaAngleV = 0.0f;break;
+			case 'w' : 
+			case 's' : deltaMoveV = 0;break;
+			case 'q': 
+			case 'z': deltaUpV = 0;break;
+			}
+		}*/
+		}
+		
+		
+		
+	
+
+	@Override
+	public void mouseDragged( MouseEvent e ) {
+		int x = e.getX();
+		int y = e.getY();
+		
+		final float throttle_rot = 128.0f;
+		
+		float dx = ( x - mouse_x0 );
+		float dy = ( y - mouse_y0 );
+		
+		if ( MOUSE_MODE_ROTATE == mouse_mode ) {
+			float phi = (float) Math.acos( scene_look_z );
+			float theta = (float) Math.atan2( scene_look_y, scene_look_x );
+			
+			theta -= dx / throttle_rot;
+			phi += dy / throttle_rot;
+			
+			if ( theta >= Math.PI * 2.0 )
+				theta -= Math.PI * 2.0;
+			else if ( theta < 0 )
+				theta += Math.PI * 2.0;
+			
+			if ( phi > Math.PI - 0.1 )
+				phi = (float)( Math.PI - 0.1 );
+			else if ( phi < 0.1f )
+				phi = 0.1f;
+			
+			scene_look_x = (float)( Math.cos( theta ) * Math.sin( phi ) );
+			scene_look_y = (float)( Math.sin( theta ) * Math.sin( phi ) );
+			scene_look_z = (float)( Math.cos( phi ) );
+		}
+		else if( MOUSE_MODE_ZOOM == mouse_mode)
+		{
+
+			 zoomy = (e.getY()-mouse_y0);		
+			//rotX += (e.getY() - mouseY0)*0.5; 
+			if(zoomy > 0)
+			{
+				zoomoffset += 0.5f;
+			}
+			else
+			{/*
+				if(zoomoffset <= -15)
+				{
+					zoomoffset = -14.1f;
+				}
+				else
+				{*/
+					zoomoffset -= 0.5f;
+				//}
+				
+			}
+		}
+		
+		mouse_x0 = x;
+		mouse_y0 = y;
+	}
+	
+	@Override
+	public void mouseMoved( MouseEvent e ) {
+	}
+
+	@Override
+	public void mouseClicked( MouseEvent e ) {
+	}
+
+	@Override
+	public void mousePressed( MouseEvent e ) {
+		mouse_x0 = e.getX();
+		mouse_y0 = e.getY();
+		
+		if ( MouseEvent.BUTTON1 == e.getButton() ) {
+			mouse_mode = MOUSE_MODE_ROTATE;
+		}
+		else if(MouseEvent.BUTTON2 == e.getButton())
+		{
+			mouse_mode = MOUSE_MODE_ZOOM;
+		}
+		else {
+		
+			mouse_mode = MOUSE_MODE_NONE;
+		}
+	}
+
+	@Override
+	public void mouseReleased( MouseEvent e ) {
+	}
+
+	@Override
+	public void mouseEntered( MouseEvent e ) {
+	}
+
+	@Override
+	public void mouseExited( MouseEvent e ) {
+	}
+}

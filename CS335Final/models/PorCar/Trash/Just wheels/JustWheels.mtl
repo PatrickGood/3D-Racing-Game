@@ -1,0 +1,27 @@
+# Blender MTL File: 'None'
+# Material Count: 2
+
+newmtl 01___Default
+Ns 1.960784
+Ka 0.000000 0.000000 0.000000
+Kd 0.301158 0.301158 0.301158
+Ks 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd 0000.bmp
+map_Bump C:\\Users\\Patrick\\workspace\\CS335Final\\models\\PorCar\\0000-a.bmp
+map_Ka C:\\Users\\Patrick\\workspace\\CS335Final\\models\\PorCar\\0000.bmp
+refl C:\\Users\\Patrick\\workspace\\CS335Final\\models\\PorCar\\Map__6_Raytrace.tga
+
+newmtl 02___Default
+Ns 1.960784
+Ka 0.000000 0.000000 0.000000
+Kd 0.301158 0.301158 0.301158
+Ks 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd 0001.bmp
+map_Ka C:\\Users\\Patrick\\workspace\\CS335Final\\models\\PorCar\\0001.bmp
+refl C:\\Users\\Patrick\\workspace\\CS335Final\\models\\PorCar\\Map__7_Raytrace.tga
